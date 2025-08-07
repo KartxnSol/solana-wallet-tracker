@@ -20,7 +20,7 @@ bot.set_current(bot)
 dp = Dispatcher(bot)
 
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://your-app-domain.up.railway.app{WEBHOOK_PATH}"
+WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
 HELIUS_PATH = "/helius"
 
 # (Your existing /start, /add, /wallets, /menu handlers go here...)
