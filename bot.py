@@ -1,26 +1,20 @@
 import logging
-import os
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
 from config import TELEGRAM_BOT_TOKEN, create_tables
 from database import add_user, get_user_wallets
 from utils import format_wallets_message
-
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-bot.set_current(bot)  # ✅ This fixes the context error
-dp = Dispatcher(bot)
-
-
-API_TOKEN = TELEGRAM_BOT_TOKEN
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
+from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=API_TOKEN)
+# Telegram Bot setup
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+bot.set_current(bot)  # Fix context issues
 dp = Dispatcher(bot)
 
-app = FastAPI()
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
 
 # Handlers
 @dp.message_handler(commands=["start"])
@@ -34,9 +28,7 @@ async def wallets_cmd(message: types.Message):
     msg, keyboard = format_wallets_message(wallets)
     await message.reply(msg, reply_markup=keyboard)
 
-# FastAPI startup
-from contextlib import asynccontextmanager
-
+# FastAPI lifecycle
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await bot.set_webhook(WEBHOOK_URL)
@@ -46,18 +38,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
+# Webhook route
 @app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
 
-        # If Telegram sent a single update
         if isinstance(data, dict):
             update = types.Update(**data)
             await dp.process_update(update)
 
-        # If Telegram sent a list of updates (rare but possible)
         elif isinstance(data, list):
             for item in data:
                 update = types.Update(**item)
@@ -68,8 +58,6 @@ async def telegram_webhook(request: Request):
     except Exception as e:
         logging.error(f"Failed to process update: {e}")
         return {"status": "error", "detail": str(e)}
-
-
 
 if __name__ == "__main__":
     import uvicorn
