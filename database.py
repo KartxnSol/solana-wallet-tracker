@@ -1,18 +1,18 @@
-from config import get_db_connection
+from config import get_connection
 
-def add_user(telegram_id):
-    conn = get_db_connection()
+def add_user(user_id):
+    conn = get_connection()
     cur = conn.cursor()
-    cur.execute("INSERT INTO users (telegram_id) VALUES (%s) ON CONFLICT DO NOTHING;", (telegram_id,))
+    cur.execute("INSERT INTO users (user_id) VALUES (%s) ON CONFLICT DO NOTHING;", (user_id,))
     conn.commit()
     cur.close()
     conn.close()
 
-def get_user_wallets(telegram_id):
-    conn = get_db_connection()
+def get_user_wallets(user_id):
+    conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT wallet_address FROM wallets WHERE user_id = (SELECT id FROM users WHERE telegram_id = %s);", (telegram_id,))
-    wallets = cur.fetchall()
+    cur.execute("SELECT address FROM wallets WHERE user_id = %s;", (user_id,))
+    wallets = [row[0] for row in cur.fetchall()]
     cur.close()
     conn.close()
     return wallets
