@@ -1,6 +1,7 @@
 import logging
 import os
 import requests
+import asyncio
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
 from config import TELEGRAM_BOT_TOKEN, create_tables
