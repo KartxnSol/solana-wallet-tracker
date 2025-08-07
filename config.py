@@ -1,11 +1,8 @@
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
-
-def create_tables():
-    from database import create_tables as ct
-    ct()
