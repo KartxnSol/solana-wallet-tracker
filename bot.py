@@ -30,14 +30,17 @@ async def wallets_cmd(message: types.Message):
     await message.reply(msg, reply_markup=keyboard)
 
 # FastAPI startup
-@app.on_event("startup")
-async def on_startup():
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await bot.set_webhook(WEBHOOK_URL)
     create_tables()
-
-@app.on_event("shutdown")
-async def on_shutdown():
+    yield
     await bot.delete_webhook()
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
