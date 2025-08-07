@@ -4,14 +4,14 @@ def format_wallets_message(wallets):
     if not wallets:
         return "📭 You don't have any wallets yet.", None
 
-    msg = "📄 <b>Your Wallets:</b>\n\n"
+    msg = "📄 <b>Your Wallets</b>:\n\n"
     keyboard = InlineKeyboardMarkup(row_width=1)
 
     for wallet in wallets:
         wallet_id, address, name, min_sol, max_sol, fresh_wallet = wallet
         label = f"{name or address[:6]}...{address[-4:]}"
         msg += f"• <b>{label}</b>\n"
-        keyboard.add(InlineKeyboardButton(text=label, callback_data=f"menu:{wallet_id}"))
+        keyboard.add(InlineKeyboardButton(label, callback_data=f"menu:{wallet_id}"))
 
     return msg, keyboard
 
