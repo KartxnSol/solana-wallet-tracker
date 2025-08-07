@@ -6,6 +6,11 @@ from config import TELEGRAM_BOT_TOKEN, create_tables
 from database import add_user, get_user_wallets
 from utils import format_wallets_message
 
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+bot.set_current(bot)  # ✅ This fixes the context error
+dp = Dispatcher(bot)
+
+
 API_TOKEN = TELEGRAM_BOT_TOKEN
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
