@@ -1,14 +1,18 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram import types
 
 def format_wallets_message(wallets):
     if not wallets:
-        return "You have no wallets yet.", None
+        return "You don’t have any wallets yet.", None
 
-    msg = "Your Solana wallets:\n\n"
-    keyboard = InlineKeyboardMarkup(row_width=1)
-
+    text = "📄 *Your Wallets:*\n\n"
     for wallet in wallets:
-        msg += f"• `{wallet}`\n"
-        keyboard.add(InlineKeyboardButton(text=wallet, url=f"https://solscan.io/account/{wallet}"))
+        name = wallet.get("name") or wallet["address"]
+        text += f"• `{name}`\n"
+    return text, None
 
-    return msg, keyboard
+def build_wallet_menu(wallet_id):
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton("✏️ Set Name", callback_data=f"name:{wallet_id}"))
+    keyboard.add(types.InlineKeyboardButton("🔢 Set Min/Max", callback_data=f"threshold:{wallet_id}"))
+    keyboard.add(types.InlineKeyboardButton("🔄 Toggle Fresh Wallet Logic", callback_data=f"toggle_fresh:{wallet_id}"))
+    return keyboard
