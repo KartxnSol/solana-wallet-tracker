@@ -9,11 +9,13 @@ def get_connection():
 
 def create_tables():
     conn, cur = get_connection()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id BIGINT PRIMARY KEY
         );
     """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS wallets (
             id SERIAL PRIMARY KEY,
@@ -25,14 +27,15 @@ def create_tables():
             fresh_wallet BOOLEAN DEFAULT TRUE
         );
     """)
+
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS wallet_alerts (
+        CREATE TABLE IF NOT EXISTS notified (
             id SERIAL PRIMARY KEY,
-            wallet_id INTEGER REFERENCES wallets(id),
-            tx_id TEXT,
-            UNIQUE(wallet_id, tx_id)
+            wallet_id INTEGER,
+            tx_signature TEXT
         );
     """)
+
     conn.commit()
     conn.close()
 
@@ -54,10 +57,7 @@ def add_wallet(user_id: int, address: str):
 
 def remove_wallet(user_id: int, address: str):
     conn, cur = get_connection()
-    cur.execute("""
-        DELETE FROM wallets
-        WHERE user_id = %s AND address = %s;
-    """, (user_id, address))
+    cur.execute("DELETE FROM wallets WHERE user_id = %s AND address = %s;", (user_id, address))
     conn.commit()
     conn.close()
 
@@ -75,42 +75,55 @@ def get_user_wallets(user_id: int):
 def get_wallet_by_address(address: str):
     conn, cur = get_connection()
     cur.execute("""
-        SELECT wallets.id, user_id, address, name, min_sol, max_sol, fresh_wallet, user_id
+        SELECT id, user_id, address, name, min_sol, max_sol, fresh_wallet, 1
         FROM wallets
-        JOIN users ON users.user_id = wallets.user_id
         WHERE address = %s;
     """, (address,))
     result = cur.fetchone()
     conn.close()
     return result
 
-def update_wallet_name(wallet_id: int, new_name: str):
+def update_wallet_name(wallet_id: int, name: str):
     conn, cur = get_connection()
-    cur.execute("UPDATE wallets SET name = %s WHERE id = %s;", (new_name, wallet_id))
+    cur.execute("UPDATE wallets SET name = %s WHERE id = %s;", (name, wallet_id))
     conn.commit()
     conn.close()
 
 def update_wallet_thresholds(wallet_id: int, min_sol: float, max_sol: float):
     conn, cur = get_connection()
-    cur.execute("UPDATE wallets SET min_sol = %s, max_sol = %s WHERE id = %s;", (min_sol, max_sol, wallet_id))
+    cur.execute("""
+        UPDATE wallets
+        SET min_sol = %s, max_sol = %s
+        WHERE id = %s;
+    """, (min_sol, max_sol, wallet_id))
     conn.commit()
     conn.close()
 
 def toggle_fresh_wallet_flag(wallet_id: int):
     conn, cur = get_connection()
-    cur.execute("UPDATE wallets SET fresh_wallet = NOT fresh_wallet WHERE id = %s;", (wallet_id,))
+    cur.execute("""
+        UPDATE wallets
+        SET fresh_wallet = NOT fresh_wallet
+        WHERE id = %s;
+    """, (wallet_id,))
     conn.commit()
     conn.close()
 
-def is_tx_notified(wallet_id: int, tx_id: str):
+def is_tx_notified(wallet_id: int, signature: str) -> bool:
     conn, cur = get_connection()
-    cur.execute("SELECT 1 FROM wallet_alerts WHERE wallet_id = %s AND tx_id = %s;", (wallet_id, tx_id))
-    exists = cur.fetchone() is not None
+    cur.execute("""
+        SELECT 1 FROM notified
+        WHERE wallet_id = %s AND tx_signature = %s;
+    """, (wallet_id, signature))
+    result = cur.fetchone()
     conn.close()
-    return exists
+    return result is not None
 
-def log_notified_tx(wallet_id: int, tx_id: str):
+def log_notified_tx(wallet_id: int, signature: str):
     conn, cur = get_connection()
-    cur.execute("INSERT INTO wallet_alerts (wallet_id, tx_id) VALUES (%s, %s) ON CONFLICT DO NOTHING;", (wallet_id, tx_id))
+    cur.execute("""
+        INSERT INTO notified (wallet_id, tx_signature)
+        VALUES (%s, %s);
+    """, (wallet_id, signature))
     conn.commit()
     conn.close()
