@@ -1,14 +1,23 @@
-import asyncio
+import logging
+import os
+from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils import executor
-from config import TELEGRAM_BOT_TOKEN
+from config import TELEGRAM_BOT_TOKEN, create_tables
 from database import add_user, get_user_wallets
 from utils import format_wallets_message
 
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+API_TOKEN = TELEGRAM_BOT_TOKEN
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
+
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+app = FastAPI()
+
+# Handlers
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
     add_user(message.from_user.id)
@@ -20,7 +29,22 @@ async def wallets_cmd(message: types.Message):
     msg, keyboard = format_wallets_message(wallets)
     await message.reply(msg, reply_markup=keyboard)
 
-if __name__ == "__main__":
-    from config import create_tables
+# FastAPI startup
+@app.on_event("startup")
+async def on_startup():
+    await bot.set_webhook(WEBHOOK_URL)
     create_tables()
-    executor.start_polling(dp, skip_updates=True)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot.delete_webhook()
+
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    update = types.Update(**await request.json())
+    await dp.process_update(update)
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("bot:app", host="0.0.0.0", port=8000)
