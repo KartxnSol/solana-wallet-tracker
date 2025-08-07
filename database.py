@@ -1,15 +1,12 @@
 import psycopg2
 import os
 
-# Get DB connection from environment variable
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Connect and return cursor + connection
 def get_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn, conn.cursor()
 
-# Create tables
 def create_tables():
     conn, cur = get_connection()
     cur.execute("""
@@ -25,27 +22,26 @@ def create_tables():
             name TEXT DEFAULT '',
             min_sol FLOAT DEFAULT 0,
             max_sol FLOAT DEFAULT 1000000,
-            fresh_wallet BOOLEAN DEFAULT FALSE
+            fresh_wallet BOOLEAN DEFAULT TRUE
         );
     """)
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS watched_tokens (
+        CREATE TABLE IF NOT EXISTS wallet_alerts (
             id SERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(user_id),
-            token_symbol TEXT NOT NULL
+            wallet_id INTEGER REFERENCES wallets(id),
+            tx_id TEXT,
+            UNIQUE(wallet_id, tx_id)
         );
     """)
     conn.commit()
     conn.close()
 
-# Add user
 def add_user(user_id: int):
     conn, cur = get_connection()
     cur.execute("INSERT INTO users (user_id) VALUES (%s) ON CONFLICT DO NOTHING;", (user_id,))
     conn.commit()
     conn.close()
 
-# Add wallet
 def add_wallet(user_id: int, address: str):
     conn, cur = get_connection()
     cur.execute("""
@@ -56,7 +52,6 @@ def add_wallet(user_id: int, address: str):
     conn.commit()
     conn.close()
 
-# Remove wallet
 def remove_wallet(user_id: int, address: str):
     conn, cur = get_connection()
     cur.execute("""
@@ -66,7 +61,6 @@ def remove_wallet(user_id: int, address: str):
     conn.commit()
     conn.close()
 
-# Get all wallets for user
 def get_user_wallets(user_id: int):
     conn, cur = get_connection()
     cur.execute("""
@@ -74,40 +68,49 @@ def get_user_wallets(user_id: int):
         FROM wallets
         WHERE user_id = %s;
     """, (user_id,))
-    rows = cur.fetchall()
+    wallets = cur.fetchall()
     conn.close()
-    return rows
+    return wallets
 
-# Update wallet name
+def get_wallet_by_address(address: str):
+    conn, cur = get_connection()
+    cur.execute("""
+        SELECT wallets.id, user_id, address, name, min_sol, max_sol, fresh_wallet, user_id
+        FROM wallets
+        JOIN users ON users.user_id = wallets.user_id
+        WHERE address = %s;
+    """, (address,))
+    result = cur.fetchone()
+    conn.close()
+    return result
+
 def update_wallet_name(wallet_id: int, new_name: str):
     conn, cur = get_connection()
-    cur.execute("""
-        UPDATE wallets
-        SET name = %s
-        WHERE id = %s;
-    """, (new_name, wallet_id))
+    cur.execute("UPDATE wallets SET name = %s WHERE id = %s;", (new_name, wallet_id))
     conn.commit()
     conn.close()
 
-# Update min/max SOL thresholds
 def update_wallet_thresholds(wallet_id: int, min_sol: float, max_sol: float):
     conn, cur = get_connection()
-    cur.execute("""
-        UPDATE wallets
-        SET min_sol = %s,
-            max_sol = %s
-        WHERE id = %s;
-    """, (min_sol, max_sol, wallet_id))
+    cur.execute("UPDATE wallets SET min_sol = %s, max_sol = %s WHERE id = %s;", (min_sol, max_sol, wallet_id))
     conn.commit()
     conn.close()
 
-# Toggle fresh wallet flag
 def toggle_fresh_wallet_flag(wallet_id: int):
     conn, cur = get_connection()
-    cur.execute("""
-        UPDATE wallets
-        SET fresh_wallet = NOT fresh_wallet
-        WHERE id = %s;
-    """, (wallet_id,))
+    cur.execute("UPDATE wallets SET fresh_wallet = NOT fresh_wallet WHERE id = %s;", (wallet_id,))
+    conn.commit()
+    conn.close()
+
+def is_tx_notified(wallet_id: int, tx_id: str):
+    conn, cur = get_connection()
+    cur.execute("SELECT 1 FROM wallet_alerts WHERE wallet_id = %s AND tx_id = %s;", (wallet_id, tx_id))
+    exists = cur.fetchone() is not None
+    conn.close()
+    return exists
+
+def log_notified_tx(wallet_id: int, tx_id: str):
+    conn, cur = get_connection()
+    cur.execute("INSERT INTO wallet_alerts (wallet_id, tx_id) VALUES (%s, %s) ON CONFLICT DO NOTHING;", (wallet_id, tx_id))
     conn.commit()
     conn.close()
