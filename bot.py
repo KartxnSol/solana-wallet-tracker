@@ -46,12 +46,24 @@ app = FastAPI(lifespan=lifespan)
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
-        update = types.Update(**data)
-        await dp.process_update(update)
+
+        # If Telegram sent a single update
+        if isinstance(data, dict):
+            update = types.Update(**data)
+            await dp.process_update(update)
+
+        # If Telegram sent a list of updates (rare but possible)
+        elif isinstance(data, list):
+            for item in data:
+                update = types.Update(**item)
+                await dp.process_update(update)
+
         return {"status": "ok"}
+
     except Exception as e:
         logging.error(f"Failed to process update: {e}")
         return {"status": "error", "detail": str(e)}
+
 
 
 if __name__ == "__main__":
