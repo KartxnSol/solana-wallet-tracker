@@ -41,9 +41,15 @@ async def on_shutdown():
 
 @app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
-    update = types.Update(**await request.json())
-    await dp.process_update(update)
-    return {"status": "ok"}
+    try:
+        data = await request.json()
+        update = types.Update(**data)
+        await dp.process_update(update)
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Failed to process update: {e}")
+        return {"status": "error", "detail": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn
