@@ -1,5 +1,6 @@
 import logging
 import os
+import requests
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -12,10 +13,10 @@ from database import (
 )
 from utils import format_wallets_message, build_wallet_menu
 from contextlib import asynccontextmanager
-import requests
 
-# --- Bot setup ---
+# --- Setup ---
 logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=TELEGRAM_BOT_TOKEN, parse_mode="HTML")
 bot.set_current(bot)
 dp = Dispatcher(bot)
@@ -24,8 +25,7 @@ WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://solana-wallet-tracker-production.up.railway.app{WEBHOOK_PATH}"
 HELIUS_PATH = "/helius"
 
-# --- Telegram Handlers ---
-
+# --- Telegram Commands ---
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
     add_user(message.from_user.id)
@@ -60,8 +60,7 @@ async def menu_cmd(message: types.Message):
         return await message.reply("You don’t have any wallets yet.")
     await message.reply("⚙️ Choose a wallet to configure:", reply_markup=format_wallets_message(wallets)[1])
 
-# --- Inline Callback Handlers ---
-
+# --- Inline Menu Callbacks ---
 @dp.callback_query_handler(lambda c: c.data.startswith("menu:"))
 async def open_wallet_menu(callback: types.CallbackQuery):
     wallet_id = int(callback.data.split(":")[1])
@@ -105,15 +104,27 @@ async def toggle_fresh(callback: types.CallbackQuery):
     await callback.answer("🔄 Fresh wallet setting toggled.")
     await open_wallet_menu(callback)
 
-# --- FastAPI lifecycle + webhook routes ---
-
+# --- FastAPI Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await bot.set_webhook(WEBHOOK_URL)
     create_tables()
+    for attempt in range(3):
+        try:
+            await bot.set_webhook(WEBHOOK_URL)
+            logging.info("✅ Webhook set.")
+            break
+        except Exception as e:
+            logging.error(f"Webhook setup failed (attempt {attempt + 1}): {e}")
+            import asyncio
+            await asyncio.sleep(2)
     yield
-    await bot.delete_webhook()
+    try:
+        await bot.delete_webhook()
+        logging.info("✅ Webhook deleted.")
+    except Exception as e:
+        logging.error(f"⚠️ Failed to delete webhook: {e}")
 
+# --- FastAPI App Setup ---
 app = FastAPI(lifespan=lifespan)
 
 @app.post(WEBHOOK_PATH)
@@ -138,7 +149,6 @@ async def helius_webhook(request: Request):
         payload = await request.json()
         for tx in payload.get("transactions", []):
             signature = tx.get("signature")
-
             for event in tx.get("events", {}).get("transfers", []):
                 to_addr = event.get("toUserAccount")
                 amount = float(event.get("amount", 0)) / 1e9
@@ -160,7 +170,7 @@ async def helius_webhook(request: Request):
                         f"https://api.helius.xyz/v0/addresses/{to_addr}/transactions?api-key={os.getenv('HELIUS_API_KEY')}&limit=2"
                     ).json()
                     if len(history) > 1:
-                        continue
+                        continue  # Not fresh
 
                 log_notified_tx(wallet_id, signature)
                 await bot.send_message(
@@ -173,7 +183,6 @@ async def helius_webhook(request: Request):
                 )
 
         return {"ok": True}
-
     except Exception as e:
         logging.error(f"Error in Helius webhook: {e}")
         return {"ok": False, "error": str(e)}
